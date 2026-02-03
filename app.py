@@ -2,28 +2,30 @@ import streamlit as st
 import google.generativeai as genai
 import pdfplumber
 
-# Setup the Page
 st.title("🤖 Gemini PDF Data Extractor")
-st.write("Upload a PDF and ask me to find specific data!")
 
-# Connect to Gemini (we will add the key in the settings later)
+# Setup API Key
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     model = genai.GenerativeModel('gemini-1.5-flash')
 else:
-    st.error("Missing API Key! Please add it in the App Settings.")
+    st.error("Go to Settings > Secrets and add GOOGLE_API_KEY")
 
-# Upload File
-uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
 
-if uploaded_file:
+if uploaded_file is not None:
+    # This part "reads" the file
     with pdfplumber.open(uploaded_file) as pdf:
-        text = "".join([page.extract_text() for page in pdf.pages])
-
-    st.success("PDF Uploaded!")
-    user_query = st.text_input("What data should I extract?", "List the items and their prices.")
-
-    if st.button("Generate"):
-        with st.spinner("Thinking..."):
-            response = model.generate_content(f"Text: {text}\n\nTask: {user_query}")
-            st.markdown(response.text)
+        pages = [page.extract_text() for page in pdf.pages]
+        text = "\n".join(filter(None, pages)) # Cleans up empty pages
+    
+    if text:
+        st.success(f"PDF Loaded! Found {len(text)} characters.")
+        user_query = st.text_input("What data should I find?", "Summarize this.")
+        
+        if st.button("Extract Data"):
+            with st.spinner("Gemini is working..."):
+                response = model.generate_content(f"Data: {text}\n\nTask: {user_query}")
+                st.write(response.text)
+    else:
+        st.error("We couldn't find any text in this PDF. Is it an image or scanned document?")
