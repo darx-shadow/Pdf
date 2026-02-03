@@ -1,20 +1,39 @@
 import streamlit as st
 import pdfplumber
+import google.generativeai as genai
 
-st.title("Safe PDF Loader")
+st.set_page_config(page_title="PDF AI")
+st.title("🚀 Smart PDF Processor")
 
-uploaded_file = st.file_uploader("Upload PDF", type="pdf")
+# 1. Setup API
+if "GOOGLE_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    st.error("Missing Key in Secrets!")
+    st.stop()
 
-if uploaded_file is not None:
-    # This message will show the moment the file hits the server
-    st.info(f"File '{uploaded_file.name}' received by server. Analyzing...")
+# 2. Upload Area
+uploaded_file = st.file_uploader("Drop PDF here", type=["pdf"])
+
+# 3. Processing Trigger
+if uploaded_file:
+    st.info(f"File selected: {uploaded_file.name}")
     
-    try:
-        with pdfplumber.open(uploaded_file) as pdf:
-            st.write(f"Number of pages detected: {len(pdf.pages)}")
-            # Just extract first page to see if it works
-            first_page_text = pdf.pages[0].extract_text()
-            st.success("First page read successfully!")
-            st.text(first_page_text[:500])
-    except Exception as e:
-        st.error(f"Upload failed at processing stage: {e}")
+    # We use a button to FORCE the code to start reading
+    if st.button("Read PDF Now"):
+        try:
+            with st.spinner("Reading contents..."):
+                with pdfplumber.open(uploaded_file) as pdf:
+                    text = "\n".join([p.extract_text() for p in pdf.pages if p.extract_text()])
+            
+            if text:
+                st.success("Read successful!")
+                # Send to Gemini
+                response = model.generate_content(f"Summarize this: {text}")
+                st.subheader("Results:")
+                st.write(response.text)
+            else:
+                st.warning("Found the file, but it looks empty or scanned.")
+        except Exception as e:
+            st.error(f"Error: {e}")
