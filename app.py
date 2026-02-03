@@ -1,45 +1,41 @@
 import streamlit as st
-import google.generativeai as genai
 import pdfplumber
+import google.generativeai as genai
 
-st.set_page_config(page_title="PDF Extractor")
-st.title("📄 PDF Data Extractor")
+st.title("Final Debug Test")
 
-# 1. API Key Check
+# STEP 1: Check Key
 if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("⚠️ API Key not found! Go to Streamlit Settings > Secrets and add: GOOGLE_API_KEY = 'your_key'")
+    st.error("Secrets are missing!")
     st.stop()
 
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+# STEP 2: File Uploader
+# If this doesn't show up, your requirements.txt is wrong
+file = st.file_uploader("Upload PDF here", type="pdf")
 
-# 2. File Uploader
-uploaded_file = st.file_uploader("Upload your PDF file here", type=["pdf"])
-
-if uploaded_file is not None:
+if file is not None:
+    st.write(f"File detected: {file.name}")
+    
     try:
-        # 3. Extract Text
-        with pdfplumber.open(uploaded_file) as pdf:
-            all_text = ""
+        # STEP 3: Try to open the PDF
+        with pdfplumber.open(file) as pdf:
+            text = ""
             for page in pdf.pages:
-                extracted = page.extract_text()
-                if extracted:
-                    all_text += extracted + "\n"
+                text += page.extract_text() or ""
         
-        if not all_text.strip():
-            st.warning("⚠️ This PDF seems to be an image (scanned). I can't read text from images yet.")
+        if text:
+            st.success("✅ Success! Text found.")
+            st.text_area("Preview of text:", text[:500]) # Show first 500 characters
+            
+            # STEP 4: Ask Gemini
+            genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            if st.button("Ask Gemini"):
+                res = model.generate_content(f"Summarize: {text}")
+                st.write(res.text)
         else:
-            st.success("✅ PDF text extracted successfully!")
+            st.warning("⚠️ The file uploaded, but no text was found inside it.")
             
-            # 4. User Question
-            user_task = st.text_input("What should I find in this PDF?", "Summarize the key points")
-            
-            if st.button("Generate Result"):
-                with st.spinner("Gemini is reading..."):
-                    prompt = f"Here is the text from a PDF:\n\n{all_text}\n\nTask: {user_task}"
-                    response = model.generate_content(prompt)
-                    st.markdown("### 🤖 Analysis:")
-                    st.write(response.text)
-                    
     except Exception as e:
-        st.error(f"❌ Error processing PDF: {e}")
+        st.error(f"The code crashed here: {e}")
